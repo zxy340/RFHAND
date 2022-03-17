@@ -77,8 +77,8 @@ class Hand(object):
 if __name__ == "__main__":
     hand_estimation = Hand('../model/hand_pose_model.pth')
 
-    current_data_index = 11  # indicate the current loaded action index
-    num_per_act = 8  # indicate the data folder number of one action
+    current_data_index = 0  # indicate the current loaded action index
+    num_per_act = 1  # indicate the data folder number of one action
 
     for index in range(1, num_per_act + 1):
         # ...............get the mmWave data and RGB data................

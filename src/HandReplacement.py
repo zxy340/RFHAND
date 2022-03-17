@@ -19,7 +19,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #     x_test = np.load('../data/x_test.npy')
 #     y_test = np.load('../data/y_test.npy')
 # else:
-current_data_index = 11  # indicate the current loaded action index
+current_data_index = 0  # indicate the current loaded action index
 num_per_act = 10  # indicate the data folder number of one action
 x_train, y_train, x_test, y_test = data_loader(current_data_index, num_per_act)
 np.save('../data/x_train.npy', x_train)

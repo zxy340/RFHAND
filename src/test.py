@@ -1,28 +1,13 @@
 import numpy as np
+import cv2
+import matplotlib.pyplot as plt
 
-Bandwidth = 3657.8e6  # Sweep Bandwidth
-sample_num = 64  # Sample Length
-chirp_num = 255  # Chirp Total
-channel_num = 4  # Channel Total
-LightVelocity = 3e8  # Speed of Light
-FreqStart = 77e9  # Start Frequency
-slope = 29.982e12  # Frequency slope
-SampleRate = 2099e3  # Sample rate
-NumRangeFFT = 64  # Range FFT Length
-FrameTime = 0.034  # the period of one frame
-ChirpTime = FrameTime / chirp_num  # the internal of the chirp
-WaveLength = LightVelocity / FreqStart  # Wave length
-numTxAntennas = 1  # the number of the Tx Antenna
-numRxAntennas = 4  # the number of the Rx Antenna
-distance = 0.8  # approximate distance between hand and radar
-
-dres = LightVelocity / (2 * Bandwidth)
-print('the range resolution is {}'.format(dres))
-dmax = SampleRate * LightVelocity / (2 * slope)
-print('the max range is {}'.format(dmax))
-vres = WaveLength / (2 * FrameTime)
-print('the velocity resolution is {}'.format(vres))
-vmax = WaveLength / (4 * ChirpTime)
-print('the max velocity is {}'.format(vmax))
-angleResmax = 180 * (2 / numRxAntennas) / np.pi
-print('the angle max resolution is {}'.format(angleResmax))
+a1 = 10
+a = a1 * np.exp(complex(0, 1) * 5)
+array = [1, np.exp(complex(0, 1)), np.exp(complex(0, 1) * 2), np.exp(complex(0, 1) * 3), np.exp(complex(0, 1) * 4), np.exp(complex(0, 1) * 5), np.exp(complex(0, 1) * 6), np.exp(complex(0, 1) * 7)]
+b = []
+for i in range(len(array)):
+    b.append(array[i] * a)
+result = np.fft.fft(b)
+plt.plot(result)
+plt.show()

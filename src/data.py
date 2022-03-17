@@ -6,10 +6,16 @@ import os
 
 RGBWidth = 1920
 RGBHeight = 1080
+chirp_num = 128  # Chirp Total
+sample_num = 256  # Sample Length
+numTxAntennas = 3  # the number of the Tx Antenna
+numRxAntennas = 4  # the number of the Rx Antenna
+padding_num = 64  # the length of the padding dimension
 
 # .............load RGB and mmWave data plus the peaks information ................
+# todo: this function is not completed
 def data_loader(current_data_index, num_per_act):
-    data = np.empty((1, 64, 256))
+    data = np.empty((1, numTxAntennas, padding_num, sample_num))
     label = np.empty((1, 2))
     for index in range(1, num_per_act + 1):
         # ...............get the mmWave data and RGB data................
@@ -17,11 +23,10 @@ def data_loader(current_data_index, num_per_act):
                 os.path.exists('../data/' + str(current_data_index) + '/' + str(index) + '/RGB/peaks.npy'):
             mmWave_syn_data = data_process(current_data_index, index)
             mmWave_syn_data = abs(mmWave_syn_data)
-            mmWave_syn_data = np.reshape(mmWave_syn_data, (len(mmWave_syn_data) * 255, 64, 256))
+            mmWave_syn_data = np.reshape(mmWave_syn_data, (len(mmWave_syn_data) * chirp_num, sample_num))
             peaks = np.load('../data/' + str(current_data_index) + '/' + str(index) + '/RGB/peaks.npy')
-            peaks = peaks[:, 0, :].squeeze()
-            peaks = peaks[2:]
-            peaks = np.repeat(peaks, 255, axis=0)
+            peaks = peaks[:, 0, :].squeeze()   # get the x-y coordinate of the first hand keypoint
+            peaks = np.repeat(peaks, chirp_num, axis=0)
             data = np.concatenate([data, mmWave_syn_data], axis=0)
             label = np.concatenate([label, peaks], axis=0)
         print('The syn mmWave data with the shape of {} has been successfully loaded from ../data/{}/{}/mmWave/mmWave.npy'.format(
