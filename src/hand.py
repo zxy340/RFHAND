@@ -86,6 +86,7 @@ if __name__ == "__main__":
                 os.path.exists('../data/' + str(current_data_index) + '/' + str(index) + '/RGB/RGB.npy') & \
                 os.path.exists('../data/' + str(current_data_index) + '/' + str(index) + '/RGB/Depth.npy'):
             RGB_syn_data = np.load('../data/' + str(current_data_index) + '/' + str(index) + '/RGB/RGB.npy')
+            RGB_syn_data = np.flip(RGB_syn_data, 2)
             print('The syn RGB data has been successfully loaded from ../data/' + str(current_data_index) + '/' + str(index) + '/RGB/RGB.npy')
             print('The shape of the RGB data is {}'.format(np.shape(RGB_syn_data)))
             peaks_all = np.empty((len(RGB_syn_data), 21, 2))

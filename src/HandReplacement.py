@@ -2,14 +2,14 @@ import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from data import GetLoader, data_loader
-from CNN import CNN
+from CNN import CNN, Linear
 import torch
 import os
 import matplotlib.pyplot as plt
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  #（保证程序cuda序号与实际cuda序号对应）
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2"  #（代表仅使用第0，1号GPU）
 # Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 # .............load RGB and mmWave data plus the peaks information ................
 # if os.path.exists('../data/x_train.npy') & os.path.exists('../data/y_train.npy') \
@@ -20,12 +20,15 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #     y_test = np.load('../data/y_test.npy')
 # else:
 current_data_index = 0  # indicate the current loaded action index
-num_per_act = 10  # indicate the data folder number of one action
-x_train, y_train, x_test, y_test = data_loader(current_data_index, num_per_act)
+num_per_act = 1  # indicate the data folder number of one action
+top_size = 128  # indicate how many points are selected from one frame
+CloudPoint_size = 6  # x, y, z, V, energy, R
+x_train, y_train, x_test, y_test = data_loader(current_data_index, num_per_act, top_size, CloudPoint_size)
 np.save('../data/x_train.npy', x_train)
 np.save('../data/y_train.npy', y_train)
 np.save('../data/x_test.npy', x_test)
 np.save('../data/y_test.npy', y_test)
+print('The shape of x_train, y_train, x_test, y_test are {}, {}, {}, {}'.format(np.shape(x_train), np.shape(y_train), np.shape(x_test), np.shape(y_test)))
 # ..................................................................................
 
 # .............load RGB and mmWave data plus the peaks information ................
@@ -43,16 +46,17 @@ testing_data_count = len(x_test)  # number of testing series
 # ..................................................................................
 # use GetLoader to load the data and return Dataset object, which contains data and labels
 torch_data = GetLoader(x_train, y_train)
-train_data = DataLoader(torch_data, batch_size=128, shuffle=True, drop_last=False)
+train_data = DataLoader(torch_data, batch_size=16, shuffle=True, drop_last=False)
 torch_data = GetLoader(x_test, y_test)
-test_data = DataLoader(torch_data, batch_size=128, shuffle=True, drop_last=False)
+test_data = DataLoader(torch_data, batch_size=16, shuffle=True, drop_last=False)
 # ....................................................................................
 
 # .............Hyper Parameters and initial model parameters..........................
-epochs = 2
+epochs = 10
 lr = 0.001  # learning rate
 # initial model
 model = CNN().to(device)
+# model = Linear().to(device)
 for name, param in model.named_parameters():
     nn.init.normal_(param)
 # loss and optimizer
@@ -63,11 +67,11 @@ optimizer = torch.optim.Adam(model.parameters(), lr)
 
 # ...........................train and store the model.................................
 # train the model
-for epoch in range(1, epochs):
-    if epoch % 3 == 0:
-        lr = lr / 10
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+for epoch in range(1, epochs + 1):
+    # if epoch % 3 == 0:
+    #     lr = lr / 10
+    # for param_group in optimizer.param_groups:
+    #     param_group['lr'] = lr
     for i, (data, labels) in enumerate(train_data):
         data = data.to(device)
         labels = labels.to(device)
@@ -82,9 +86,9 @@ for epoch in range(1, epochs):
         loss.backward()
         optimizer.step()
 
-        if i % 30 == 0:
-            print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
-                  .format(epoch + 1, epochs, i + 1, training_data_count / 128, loss.item()))
+        # if i % 30 == 0:
+        print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
+              .format(epoch, epochs, i + 1, training_data_count / 16, loss.item()))
 
 # ........................................................................................
 

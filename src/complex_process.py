@@ -4,7 +4,8 @@ import cv2
 import matplotlib
 import matplotlib.pyplot as plt
 
-def clutter_removal(input_val, axis=0): #
+
+def clutter_removal(input_val, axis=0):  #
     # Reorder the axes
     reordering = np.arange(len(input_val.shape))
     reordering[0] = axis
@@ -15,7 +16,21 @@ def clutter_removal(input_val, axis=0): #
     output_val = input_val - mean
     return output_val.transpose(reordering)
 
-def naive_xyz(virtual_ant, num_tx=3, num_rx=4, fft_size=64): #
+
+def rangeFFT(reshapedData, sample_num):
+    windowedBins1D = reshapedData * np.hamming(sample_num)
+    rangeFFTResult = np.fft.fft(windowedBins1D)
+    return rangeFFTResult
+
+
+def dopplerFFT(rangeFFTResult, chirp_num):
+    windowedBins2D = rangeFFTResult * np.reshape(np.hamming(chirp_num), (1, 1, -1, 1))
+    dopplerFFTResult = np.fft.fft(windowedBins2D, axis=2)
+    dopplerFFTResult = np.fft.fftshift(dopplerFFTResult, axes=2)
+    return dopplerFFTResult
+
+
+def naive_xyz(virtual_ant, num_tx=3, num_rx=4, fft_size=64):  #
     assert num_tx > 2, "need a config for more than 2 TXs"
     num_detected_obj = virtual_ant.shape[1]
     azimuth_ant = virtual_ant[[8, 9, 4, 5], :]
@@ -56,7 +71,58 @@ def naive_xyz(virtual_ant, num_tx=3, num_rx=4, fft_size=64): #
     y_vector = np.sqrt(y_vector)
     return x_vector, y_vector, z_vector
 
-def data_process(current_data_index, index):
+
+def frame2pointcloud(reshapedData, sample_num, chirp_num, top_size, LightVelocity, Bandwidth, WaveLength, FrameTime):
+    # get 1D range profile->rangeFFT
+    rangeFFTResult = rangeFFT(reshapedData, sample_num)
+    rangeFFTResult = clutter_removal(rangeFFTResult, axis=2)
+    # get 2D range-velocity profile->dopplerFFT
+    dopplerFFTResult = dopplerFFT(rangeFFTResult, chirp_num)
+    # get 2D range-angle profile->angleFFT
+    dopplerResultSumAllAntenna = np.sum(dopplerFFTResult, axis=(0, 1))
+    dopplerResultInDB = np.log10(np.absolute(dopplerResultSumAllAntenna))
+    # filter out the bins which are too far from radar
+    dopplerResultInDB[:, 15:] = -100
+
+    cfarResult = np.zeros(dopplerResultInDB.shape, bool)
+    energyThre128 = np.partition(dopplerResultInDB.ravel(), 128 * 256 - top_size - 1)[
+        128 * 256 - top_size - 1]
+    cfarResult[dopplerResultInDB > energyThre128] = True
+
+    det_peaks_indices = np.argwhere(cfarResult == True)
+    R = det_peaks_indices[:, 1].astype(np.float64)
+    V = (det_peaks_indices[:, 0] - chirp_num // 2).astype(np.float64)
+    R *= LightVelocity / (2 * Bandwidth)
+    V *= WaveLength / (2 * FrameTime)
+    energy = dopplerResultInDB[cfarResult == True]
+
+    AOAInput = dopplerFFTResult[:, :, cfarResult == True]
+    AOAInput = AOAInput.reshape(12, -1)
+    x_vec, y_vec, z_vec = naive_xyz(AOAInput)
+    x, y, z = x_vec * R, y_vec * R, z_vec * R
+    pointCloud_frame = np.concatenate((x, y, z, V, energy, R))
+    pointCloud_frame = np.reshape(pointCloud_frame, (6, -1))
+    pointCloud_frame = pointCloud_frame[:, y_vec != 0]
+    return pointCloud_frame
+
+
+def reg_data(data, pc_size):
+    pc_tmp = np.zeros((pc_size, 6), dtype=np.float32)
+    pc_no = data.shape[0]
+    if pc_no < pc_size:
+        fill_list = np.random.choice(pc_size, size=pc_no, replace=False)
+        fill_set = set(fill_list)
+        pc_tmp[fill_list] = data
+        dupl_list = [x for x in range(pc_size) if x not in fill_set]
+        dupl_pc = np.random.choice(pc_no, size=len(dupl_list), replace=True)
+        pc_tmp[dupl_list] = data[dupl_pc]
+    else:
+        pc_list = np.random.choice(pc_no, size=pc_size, replace=False)
+        pc_tmp = data[pc_list]
+    return pc_tmp
+
+
+def data_process(current_data_index, index, top_size, CloudPoint_size):
     if os.path.exists('../data/' + str(current_data_index) + '/' + str(index) + '/mmWave/mmWave.npy') & \
             os.path.exists('../data/' + str(current_data_index) + '/' + str(index) + '/RGB/RGB.npy'):
         mmWave_data = np.load('../data/' + str(current_data_index) + '/' + str(index) + '/mmWave/mmWave.npy')
@@ -89,67 +155,34 @@ def data_process(current_data_index, index):
         frameWithChirp = np.flip(frameWithChirp, 4)
         print('the shape of the data before rangeFFT is {}'.format(np.shape(frameWithChirp)))
 
-        azimuth_range = np.zeros((frame_num, chirp_num, padding_num, sample_num), dtype=complex)
+        pointCloud = np.zeros((frame_num, top_size, CloudPoint_size))  # the final point cloud
         for frame in range(frame_num):
-            print(frame)
-            # get 1D range profile->rangeFFT
-            windowedBins1D = frameWithChirp[frame] * np.hamming(sample_num)
-            rangeFFTResult = np.fft.fft(windowedBins1D)
-            rangeFFTResult = clutter_removal(rangeFFTResult, axis=2)
-            # get 2D range-velocity profile->dopplerFFT
-            windowedBins2D = rangeFFTResult * np.reshape(np.hamming(chirp_num), (1, 1, -1, 1))
-            dopplerFFTResult = np.fft.fft(windowedBins2D, axis=2)
-            dopplerFFTResult = np.fft.fftshift(dopplerFFTResult, axes=2)
-            # get 2D range-angle profile->angleFFT
-            dopplerResultSumAllAntenna = np.sum(dopplerFFTResult, axis=(0, 1))
-            dopplerResultInDB  = np.log10(np.absolute(dopplerResultSumAllAntenna))
-            # filter out the bins which are too far from radar
-            dopplerResultInDB[:, 15:] = -100
-
-            cfarResult = np.zeros(dopplerResultInDB.shape, bool)
-            top_size = 32
-            energyThre128 = np.partition(dopplerResultInDB.ravel(), 128 * 256 - top_size - 1)[
-                128 * 256 - top_size - 1]
-            cfarResult[dopplerResultInDB > energyThre128] = True
-
-            det_peaks_indices = np.argwhere(cfarResult == True)
-            R = det_peaks_indices[:, 1].astype(np.float64)
-            V = (det_peaks_indices[:, 0] - chirp_num // 2).astype(np.float64)
-            R *= LightVelocity / (2 * Bandwidth)
-            V *= WaveLength / (2 * FrameTime)
-            energy = dopplerResultInDB[cfarResult == True]
-
-            AOAInput = dopplerFFTResult[:, :, cfarResult == True]
-            AOAInput = AOAInput.reshape(12, -1)
-            x_vec, y_vec, z_vec = naive_xyz(AOAInput)
-            x, y, z = x_vec * R, y_vec * R, z_vec * R
-            pointCloud = np.concatenate((x, y, z, V, energy, R))
-            pointCloud = np.reshape(pointCloud, (6, -1))
-            pointCloud = pointCloud[:, y_vec != 0]
-
-            fig = plt.figure()
-            # ax1 = fig.add_subplot(211, projection='3d')
-            # ax1.scatter(x, y, z)
+            pointCloud_frame = frame2pointcloud(frameWithChirp[frame], sample_num, chirp_num, top_size, LightVelocity, Bandwidth, WaveLength, FrameTime)
+            if len(pointCloud_frame) == 0:
+                pointCloud_frame = np.zeros((6, 1))
+            pointCloud_frame = np.transpose(pointCloud_frame, (1, 0))
+            pointCloud_frame = reg_data(pointCloud_frame, 128)
+            pointCloud[frame] = pointCloud_frame
+            # fig = plt.figure()
+            # # ax1 = fig.add_subplot(211, projection='3d')
+            # # ax1.scatter(x, y, z)
+            # # plt.xlabel('X')
+            # # plt.ylabel('Y')
+            # # min_v = min(energy)
+            # # max_v = max(energy)
+            # # print(min_v)
+            # # print(max_v)
+            # min_v = 0
+            # max_v = 7
+            # color = [plt.get_cmap("seismic", 100)(int(float(i - min_v) / (max_v - min_v) * 100)) for i in energy]
+            # ax1 = fig.add_subplot(211)
+            # plt.set_cmap(plt.get_cmap("seismic", 100))
+            # im = ax1.scatter(x, z, c=color)
+            # fig.colorbar(im, format=matplotlib.ticker.FuncFormatter(lambda x, pos: int(x*(max_v-min_v)+min_v)))
             # plt.xlabel('X')
-            # plt.ylabel('Y')
-            # min_v = min(energy)
-            # max_v = max(energy)
-            # print(min_v)
-            # print(max_v)
-            min_v = 0
-            max_v = 7
-            color = [plt.get_cmap("seismic", 100)(int(float(i - min_v) / (max_v - min_v) * 100)) for i in energy]
-            ax1 = fig.add_subplot(211)
-            plt.set_cmap(plt.get_cmap("seismic", 100))
-            im = ax1.scatter(x, z, c=color)
-            fig.colorbar(im, format=matplotlib.ticker.FuncFormatter(lambda x, pos: int(x*(max_v-min_v)+min_v)))
-            plt.xlabel('X')
-            plt.ylabel('Z')
-
-            ax2 = fig.add_subplot(212)
-            ax2.imshow(RGB_data[frame])
-            plt.show()
+            # plt.ylabel('Z')
+            #
+            # ax2 = fig.add_subplot(212)
+            # ax2.imshow(RGB_data[frame])
+            # plt.show()
         return pointCloud
-    else:
-        print('there is no data to be processed!')
-        return 0

@@ -1,13 +1,12 @@
 import numpy as np
 import cv2
+import sys
 import matplotlib.pyplot as plt
+import torch.nn as nn
 
-a1 = 10
-a = a1 * np.exp(complex(0, 1) * 5)
-array = [1, np.exp(complex(0, 1)), np.exp(complex(0, 1) * 2), np.exp(complex(0, 1) * 3), np.exp(complex(0, 1) * 4), np.exp(complex(0, 1) * 5), np.exp(complex(0, 1) * 6), np.exp(complex(0, 1) * 7)]
-b = []
-for i in range(len(array)):
-    b.append(array[i] * a)
-result = np.fft.fft(b)
-plt.plot(result)
-plt.show()
+# pool of square window of size=3, stride=2
+m = nn.MaxPool2d(3, stride=2)
+# pool of non-square window
+m = nn.MaxPool2d((3, 2), stride=(2, 1))
+input = autograd.Variable(torch.randn(20, 16, 50, 32))
+output = m(input)
