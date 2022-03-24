@@ -81,8 +81,8 @@ class GetLoader(torch.utils.data.Dataset):
         self.label = data_label
     # index is divided based on the batchsize, finally return the data and corresponding labels
     def __getitem__(self, index):
-        data = self.data[index]
-        labels = self.label[index]
+        data = self.data[index].copy()
+        labels = self.label[index].copy()
         labels[0] = labels[0] / RGBWidth
         labels[1] = labels[1] / RGBHeight
         return data, labels

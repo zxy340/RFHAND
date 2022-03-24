@@ -52,7 +52,7 @@ test_data = DataLoader(torch_data, batch_size=16, shuffle=True, drop_last=False)
 # ....................................................................................
 
 # .............Hyper Parameters and initial model parameters..........................
-epochs = 10
+epochs = 20
 lr = 0.001  # learning rate
 # initial model
 model = CNN().to(device)
@@ -68,10 +68,10 @@ optimizer = torch.optim.Adam(model.parameters(), lr)
 # ...........................train and store the model.................................
 # train the model
 for epoch in range(1, epochs + 1):
-    # if epoch % 3 == 0:
-    #     lr = lr / 10
-    # for param_group in optimizer.param_groups:
-    #     param_group['lr'] = lr
+    if epoch % 10 == 0:
+        lr = lr / 10
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
     for i, (data, labels) in enumerate(train_data):
         data = data.to(device)
         labels = labels.to(device)
@@ -79,7 +79,7 @@ for epoch in range(1, epochs + 1):
         # forward pass
         outputs = model(data.float())
         loss = criterion(outputs.float(), labels.float())
-        loss = loss + 0.01 * (torch.norm(outputs[:, 0]) + torch.norm(outputs[:, 1]))
+        # loss = loss + 0.01 * (torch.norm(outputs[:, 0]) + torch.norm(outputs[:, 1]))
         optimizer.zero_grad()
 
         # backward and optimize

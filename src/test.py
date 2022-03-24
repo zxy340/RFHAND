@@ -4,9 +4,13 @@ import sys
 import matplotlib.pyplot as plt
 import torch.nn as nn
 
-# pool of square window of size=3, stride=2
-m = nn.MaxPool2d(3, stride=2)
-# pool of non-square window
-m = nn.MaxPool2d((3, 2), stride=(2, 1))
-input = autograd.Variable(torch.randn(20, 16, 50, 32))
-output = m(input)
+a = "123456"
+b = a
+print(id(a))
+print(id(b))
+
+b = b + "789"
+print(a[0])
+print(b[0])
+print(id(a[0]))
+print(id(b[0]))
